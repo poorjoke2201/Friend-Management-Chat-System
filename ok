@@ -6,39 +6,43 @@
 #define MAX_USERS 100
 #define MAX_FRIENDS 10
 #define MAX_REQUESTS 10
-#define MAX_CHAT_MESSAGES 50
-#define MESSAGE_LENGTH 256
+#define MAX_MESSAGES 100
 #define ID_LENGTH 20
 #define FILE_NAME "users.db"
 
 // User structure
 struct User {
-    char userID[ID_LENGTH];                  // Unique User ID (string)
-    char displayName[50];                    // Display Name
-    char password[50];                       // Password
-    char friends[MAX_FRIENDS][ID_LENGTH];    // Friends (store UserIDs)
+    char userID[ID_LENGTH];
+    char displayName[50];
+    char password[50];
+    char friends[MAX_FRIENDS][ID_LENGTH];
     int friendCount;
-    char requests[MAX_REQUESTS][ID_LENGTH];  // Incoming friend requests
+
+    char requests[MAX_REQUESTS][ID_LENGTH];
     int requestCount;
-    char requested[MAX_REQUESTS][ID_LENGTH]; // Sent friend requests
+
+    char requested[MAX_REQUESTS][ID_LENGTH];
     int requestedCount;
-    char chatHistory[MAX_FRIENDS][MAX_CHAT_MESSAGES][MESSAGE_LENGTH]; // Chat history for each friend
-    int chatCount[MAX_FRIENDS];              // Number of messages for each friend
+
+    char chatHistory[MAX_USERS][MAX_MESSAGES][200]; // Chat history per friend
+    int messageCount[MAX_USERS]; // Number of messages per friend
 };
 
-// Global variables
 struct User users[MAX_USERS];
 int userCount = 0;
 
 // Function prototypes
+void loggedInMenu(int currentUserIndex);
 void saveUsersToFile();
 void loadUsersFromFile();
-int findUserIndexByID(const char *userID);
-void createNewUser();
-void displayTotalUsers();
-void loginUser();
-void loggedInMenu(int currentUserIndex);
-void openChatbox(int currentUserIndex);
+
+// Helper function to find user index by ID
+int findUserIndexByID(const char *userID) {
+    for (int i = 0; i < userCount; i++) {
+        if (strcmp(users[i].userID, userID) == 0) return i;
+    }
+    return -1;
+}
 
 // Function to save users to file
 void saveUsersToFile() {
@@ -64,176 +68,130 @@ void loadUsersFromFile() {
     fclose(file);
 }
 
-// Helper function to find user index by ID
-int findUserIndexByID(const char *userID) {
-    for (int i = 0; i < userCount; i++) {
-        if (strcmp(users[i].userID, userID) == 0)
-            return i;
-    }
-    return -1;
-}
-
-// Function to create a new user
-void createNewUser() {
-    char userID[ID_LENGTH], displayName[50], password[50];
-
-    printf("Enter a new UserID: ");
-    scanf("%s", userID);
-
-    if (findUserIndexByID(userID) != -1) {
-        printf("Error: UserID '%s' already exists.\n", userID);
+// Function to check friend requests
+void checkFriendRequests(int currentUserIndex) {
+    if (users[currentUserIndex].requestCount == 0) {
+        printf("No incoming friend requests.\n");
         return;
     }
 
-    printf("Enter Display Name: ");
-    scanf("%s", displayName);
+    printf("Incoming Friend Requests:\n");
+    for (int i = 0; i < users[currentUserIndex].requestCount; i++) {
+        printf("- UserID: %s\n", users[currentUserIndex].requests[i]);
+    }
 
-    printf("Enter Password: ");
-    scanf("%s", password);
+    char userID[ID_LENGTH];
+    printf("Enter the UserID to accept or reject (or 0 to go back): ");
+    scanf("%s", userID);
 
-    strcpy(users[userCount].userID, userID);
-    strcpy(users[userCount].displayName, displayName);
-    strcpy(users[userCount].password, password);
-    users[userCount].friendCount = 0;
-    users[userCount].requestCount = 0;
-    users[userCount].requestedCount = 0;
-    memset(users[userCount].chatCount, 0, sizeof(users[userCount].chatCount)); // Initialize chat count to 0
+    if (strcmp(userID, "0") == 0) return;
 
-    userCount++;
-    saveUsersToFile();
+    int requestIndex = -1;
+    for (int i = 0; i < users[currentUserIndex].requestCount; i++) {
+        if (strcmp(users[currentUserIndex].requests[i], userID) == 0) {
+            requestIndex = i;
+            break;
+        }
+    }
 
-    printf("User created successfully!\n");
+    if (requestIndex == -1) {
+        printf("Invalid UserID. No request found.\n");
+        return;
+    }
+
+    int friendIndex = findUserIndexByID(userID);
+    if (friendIndex == -1) {
+        printf("User not found.\n");
+        return;
+    }
+
+    printf("Do you want to accept the friend request from %s? (1 for Yes, 0 for No): ", userID);
+    int choice;
+    scanf("%d", &choice);
+
+    if (choice == 1) {
+        // Accept friend request
+        strcpy(users[currentUserIndex].friends[users[currentUserIndex].friendCount++], userID);
+        strcpy(users[friendIndex].friends[users[friendIndex].friendCount++], users[currentUserIndex].userID);
+
+        // Remove the request
+        for (int i = requestIndex; i < users[currentUserIndex].requestCount - 1; i++) {
+            strcpy(users[currentUserIndex].requests[i], users[currentUserIndex].requests[i + 1]);
+        }
+        users[currentUserIndex].requestCount--;
+
+        saveUsersToFile();
+        printf("Friend request accepted!\n");
+    } else {
+        printf("Friend request rejected.\n");
+    }
 }
 
-// Function to display total users
-void displayTotalUsers() {
-    printf("Total number of users: %d\n", userCount);
+// Function to suggest friends
+void suggestFriends(int currentUserIndex) {
+    printf("\nFriend Suggestions:\n");
+    bool suggested[MAX_USERS] = {false};
+
+    for (int i = 0; i < users[currentUserIndex].friendCount; i++) {
+        int friendIndex = findUserIndexByID(users[currentUserIndex].friends[i]);
+        if (friendIndex == -1) continue;
+
+        for (int j = 0; j < users[friendIndex].friendCount; j++) {
+            int suggestionIndex = findUserIndexByID(users[friendIndex].friends[j]);
+            if (suggestionIndex != -1 && strcmp(users[suggestionIndex].userID, users[currentUserIndex].userID) != 0) {
+                if (!suggested[suggestionIndex]) {
+                    suggested[suggestionIndex] = true;
+                    printf("- UserID: %s, Display Name: %s\n", users[suggestionIndex].userID, users[suggestionIndex].displayName);
+                }
+            }
+        }
+    }
 }
 
-// Function for login
+// Function to log in
 void loginUser() {
     char userID[ID_LENGTH], password[50];
-
     printf("Enter UserID: ");
     scanf("%s", userID);
-
-    int userIndex = findUserIndexByID(userID);
-    if (userIndex == -1) {
-        printf("Error: UserID '%s' does not exist.\n", userID);
-        return;
-    }
-
     printf("Enter Password: ");
     scanf("%s", password);
 
-    if (strcmp(users[userIndex].password, password) != 0) {
-        printf("Error: Incorrect password.\n");
+    int userIndex = findUserIndexByID(userID);
+    if (userIndex == -1 || strcmp(users[userIndex].password, password) != 0) {
+        printf("Invalid UserID or Password!\n");
         return;
     }
 
-    printf("Login successful! Welcome, %s.\n", users[userIndex].displayName);
+    printf("Login successful. Welcome, %s!\n", users[userIndex].displayName);
     loggedInMenu(userIndex);
 }
 
-// Function for logged-in menu
+// Logged-in menu
 void loggedInMenu(int currentUserIndex) {
     int choice;
-
     do {
-        printf("\n--- Logged-In Menu ---\n");
-        printf("1. Display friends\n");
-        printf("2. Open chatbox\n");
-        printf("3. Logout\n");
+        printf("\n--- Logged-in Menu ---\n");
+        printf("1. View friends\n");
+        printf("2. Send friend request\n");
+        printf("3. Check friend requests\n");
+        printf("4. Suggest friends\n");
+        printf("5. Remove friend\n");
+        printf("6. Open Chatbox\n");
+        printf("7. Logout\n");
         printf("Enter your choice: ");
         scanf("%d", &choice);
 
         switch (choice) {
-            case 1:
-                printf("\n--- Friends ---\n");
-                if (users[currentUserIndex].friendCount == 0) {
-                    printf("You have no friends.\n");
-                } else {
-                    for (int i = 0; i < users[currentUserIndex].friendCount; i++) {
-                        int friendIndex = findUserIndexByID(users[currentUserIndex].friends[i]);
-                        if (friendIndex != -1) {
-                            printf("%d. %s (UserID: %s)\n", i + 1, users[friendIndex].displayName, users[friendIndex].userID);
-                        }
-                    }
-                }
-                break;
-
-            case 2:
-                openChatbox(currentUserIndex);
-                break;
-
-            case 3:
-                printf("Logging out...\n");
-                return;
-
-            default:
-                printf("Invalid choice! Try again.\n");
+            case 1: displayFriends(currentUserIndex); break;
+            case 2: addFriend(currentUserIndex); break;
+            case 3: checkFriendRequests(currentUserIndex); break;
+            case 4: suggestFriends(currentUserIndex); break;
+            case 5: removeFriend(currentUserIndex); break;
+            case 6: openChatbox(currentUserIndex); break;
+            case 7: printf("Logged out.\n"); break;
+            default: printf("Invalid choice!\n");
         }
-    } while (choice != 3);
-}
-
-// Function to open chatbox
-void openChatbox(int currentUserIndex) {
-    if (users[currentUserIndex].friendCount == 0) {
-        printf("You have no friends to chat with.\n");
-        return;
-    }
-
-    printf("\nYour Friends:\n");
-    for (int i = 0; i < users[currentUserIndex].friendCount; i++) {
-        int friendIndex = findUserIndexByID(users[currentUserIndex].friends[i]);
-        if (friendIndex != -1) {
-            printf("%d. %s (UserID: %s)\n", i + 1, users[friendIndex].displayName, users[friendIndex].userID);
-        }
-    }
-
-    int choice;
-    printf("\nEnter the number of the friend to chat with or 0 to go back: ");
-    scanf("%d", &choice);
-
-    if (choice < 1 || choice > users[currentUserIndex].friendCount) {
-        printf("Returning to main menu.\n");
-        return;
-    }
-
-    int friendIndex = findUserIndexByID(users[currentUserIndex].friends[choice - 1]);
-    if (friendIndex == -1) {
-        printf("Error finding friend. Returning to menu.\n");
-        return;
-    }
-
-    printf("\nChat with %s (UserID: %s):\n", users[friendIndex].displayName, users[friendIndex].userID);
-
-    int chatIndex = choice - 1;
-    for (int i = 0; i < users[currentUserIndex].chatCount[chatIndex]; i++) {
-        printf("%s\n", users[currentUserIndex].chatHistory[chatIndex][i]);
-    }
-
-    char message[MESSAGE_LENGTH];
-    printf("\nEnter your message (type 'exit' to go back): ");
-    while (1) {
-        getchar(); // Clear input buffer
-        fgets(message, MESSAGE_LENGTH, stdin);
-        message[strcspn(message, "\n")] = '\0'; // Remove newline character
-
-        if (strcmp(message, "exit") == 0) {
-            break;
-        }
-
-        // Save the message in the chat history
-        snprintf(users[currentUserIndex].chatHistory[chatIndex][users[currentUserIndex].chatCount[chatIndex]++],
-                 MESSAGE_LENGTH, "You: %s", message);
-        snprintf(users[friendIndex].chatHistory[findUserIndexByID(users[currentUserIndex].userID)][users[friendIndex].chatCount[chatIndex]++],
-                 MESSAGE_LENGTH, "%s: %s", users[currentUserIndex].displayName, message);
-
-        saveUsersToFile();
-
-        printf("\nMessage sent! Enter another message or type 'exit' to leave: ");
-    }
+    } while (choice != 7);
 }
 
 // Main function
@@ -251,20 +209,11 @@ int main() {
         scanf("%d", &choice);
 
         switch (choice) {
-            case 1:
-                displayTotalUsers();
-                break;
-            case 2:
-                createNewUser();
-                break;
-            case 3:
-                loginUser();
-                break;
-            case 4:
-                printf("Exiting program. Goodbye!\n");
-                break;
-            default:
-                printf("Invalid choice!\n");
+            case 1: displayTotalUsers(); break;
+            case 2: createNewUser(); break;
+            case 3: loginUser(); break;
+            case 4: printf("Exiting program. Goodbye!\n"); break;
+            default: printf("Invalid choice!\n");
         }
     } while (choice != 4);
 
