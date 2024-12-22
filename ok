@@ -38,11 +38,6 @@ void createNewUser();
 void displayTotalUsers();
 void loginUser();
 void loggedInMenu(int currentUserIndex);
-void addFriend(int currentUserIndex);
-void displayFriends(int currentUserIndex);
-void removeFriend(int currentUserIndex);
-void suggestFriends(int currentUserIndex);
-void checkFriendRequests(int currentUserIndex);
 void openChatbox(int currentUserIndex);
 
 // Function to save users to file
@@ -115,7 +110,73 @@ void displayTotalUsers() {
     printf("Total number of users: %d\n", userCount);
 }
 
-// Function to display the chatbox
+// Function for login
+void loginUser() {
+    char userID[ID_LENGTH], password[50];
+
+    printf("Enter UserID: ");
+    scanf("%s", userID);
+
+    int userIndex = findUserIndexByID(userID);
+    if (userIndex == -1) {
+        printf("Error: UserID '%s' does not exist.\n", userID);
+        return;
+    }
+
+    printf("Enter Password: ");
+    scanf("%s", password);
+
+    if (strcmp(users[userIndex].password, password) != 0) {
+        printf("Error: Incorrect password.\n");
+        return;
+    }
+
+    printf("Login successful! Welcome, %s.\n", users[userIndex].displayName);
+    loggedInMenu(userIndex);
+}
+
+// Function for logged-in menu
+void loggedInMenu(int currentUserIndex) {
+    int choice;
+
+    do {
+        printf("\n--- Logged-In Menu ---\n");
+        printf("1. Display friends\n");
+        printf("2. Open chatbox\n");
+        printf("3. Logout\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
+
+        switch (choice) {
+            case 1:
+                printf("\n--- Friends ---\n");
+                if (users[currentUserIndex].friendCount == 0) {
+                    printf("You have no friends.\n");
+                } else {
+                    for (int i = 0; i < users[currentUserIndex].friendCount; i++) {
+                        int friendIndex = findUserIndexByID(users[currentUserIndex].friends[i]);
+                        if (friendIndex != -1) {
+                            printf("%d. %s (UserID: %s)\n", i + 1, users[friendIndex].displayName, users[friendIndex].userID);
+                        }
+                    }
+                }
+                break;
+
+            case 2:
+                openChatbox(currentUserIndex);
+                break;
+
+            case 3:
+                printf("Logging out...\n");
+                return;
+
+            default:
+                printf("Invalid choice! Try again.\n");
+        }
+    } while (choice != 3);
+}
+
+// Function to open chatbox
 void openChatbox(int currentUserIndex) {
     if (users[currentUserIndex].friendCount == 0) {
         printf("You have no friends to chat with.\n");
@@ -174,9 +235,6 @@ void openChatbox(int currentUserIndex) {
         printf("\nMessage sent! Enter another message or type 'exit' to leave: ");
     }
 }
-
-// Add other functions (e.g., addFriend, removeFriend, etc.) from the previous code
-// Add the main menu to integrate `openChatbox`
 
 // Main function
 int main() {
