@@ -165,6 +165,206 @@ void loginUser() {
     printf("Login successful. Welcome, %s!\n", users[userIndex].displayName);
     loggedInMenu(userIndex);
 }
+void addFriend(int currentUserIndex) {
+    char friendID[ID_LENGTH];
+    printf("Enter UserID of the friend you want to add: ");
+    scanf("%s", friendID);
+
+    if (strcmp(friendID, users[currentUserIndex].userID) == 0) {
+        printf("You cannot add yourself as a friend!\n");
+        return;
+    }
+
+    int friendIndex = findUserIndexByID(friendID);
+    if (friendIndex == -1) {
+        printf("User not found!\n");
+        return;
+    }
+
+    for (int i = 0; i < users[currentUserIndex].friendCount; i++) {
+        if (strcmp(users[currentUserIndex].friends[i], friendID) == 0) {
+            printf("You are already friends!\n");
+            return;
+        }
+    }
+
+    strcpy(users[currentUserIndex].requested[users[currentUserIndex].requestedCount++], friendID);
+    strcpy(users[friendIndex].requests[users[friendIndex].requestCount++], users[currentUserIndex].userID);
+
+    saveUsersToFile();
+    printf("Friend request sent to %s!\n", users[friendIndex].displayName);
+}
+
+void removeFriend(int currentUserIndex) {
+    char friendID[ID_LENGTH];
+    printf("Enter UserID of the friend to remove: ");
+    scanf("%s", friendID);
+
+    int friendIndex = findUserIndexByID(friendID);
+    if (friendIndex == -1) {
+        printf("User not found!\n");
+        return;
+    }
+
+    bool found = false;
+    for (int i = 0; i < users[currentUserIndex].friendCount; i++) {
+        if (strcmp(users[currentUserIndex].friends[i], friendID) == 0) {
+            found = true;
+            for (int j = i; j < users[currentUserIndex].friendCount - 1; j++) {
+                strcpy(users[currentUserIndex].friends[j], users[currentUserIndex].friends[j + 1]);
+            }
+            users[currentUserIndex].friendCount--;
+            break;
+        }
+    }
+
+    if (found) {
+        for (int i = 0; i < users[friendIndex].friendCount; i++) {
+            if (strcmp(users[friendIndex].friends[i], users[currentUserIndex].userID) == 0) {
+                for (int j = i; j < users[friendIndex].friendCount - 1; j++) {
+                    strcpy(users[friendIndex].friends[j], users[friendIndex].friends[j + 1]);
+                }
+                users[friendIndex].friendCount--;
+                break;
+            }
+        }
+        saveUsersToFile();
+        printf("Friend removed successfully.\n");
+    } else {
+        printf("User is not in your friend list.\n");
+    }
+}
+void displayFriends(int currentUserIndex) {
+    printf("\nYour Friends:\n");
+    if (users[currentUserIndex].friendCount == 0) {
+        printf("No friends yet.\n");
+        return;
+    }
+
+    for (int i = 0; i < users[currentUserIndex].friendCount; i++) {
+        int friendIndex = findUserIndexByID(users[currentUserIndex].friends[i]);
+        printf("- UserID: %s, Display Name: %s\n", users[friendIndex].userID, users[friendIndex].displayName);
+    }
+}
+void createNewUser() {
+    char userID[ID_LENGTH], displayName[50], password[50];
+
+    printf("Enter a new UserID: ");
+    scanf("%s", userID);
+
+    if (findUserIndexByID(userID) != -1) {
+        printf("Error: UserID '%s' already exists.\n", userID);
+        return;
+    }
+
+    printf("Enter Display Name: ");
+    scanf("%s", displayName);
+
+    printf("Enter Password: ");
+    scanf("%s", password);
+
+    strcpy(users[userCount].userID, userID);
+    strcpy(users[userCount].displayName, displayName);
+    strcpy(users[userCount].password, password);
+    users[userCount].friendCount = 0;
+    users[userCount].requestCount = 0;
+    users[userCount].requestedCount = 0;
+
+    userCount++;
+
+    saveUsersToFile();
+    printf("User created successfully!\n");
+}
+
+// Function to display total users
+void displayTotalUsers() {
+    printf("Total number of users: %d\n", userCount);
+}
+
+void openChatbox(int currentUserIndex) {
+    char friendID[ID_LENGTH];
+    printf("\n--- Chatbox ---\n");
+    displayFriends(currentUserIndex);
+
+    if (users[currentUserIndex].friendCount == 0) {
+        printf("You have no friends to chat with.\n");
+        return;
+    }
+
+    printf("Enter the UserID of the friend you want to chat with (or 0 to go back): ");
+    scanf("%s", friendID);
+
+    if (strcmp(friendID, "0") == 0) return;
+
+    int friendIndex = findUserIndexByID(friendID);
+    if (friendIndex == -1 || strcmp(friendID, users[currentUserIndex].userID) == 0) {
+        printf("Invalid UserID.\n");
+        return;
+    }
+
+    // Ensure the selected user is actually a friend
+    bool isFriend = false;
+    for (int i = 0; i < users[currentUserIndex].friendCount; i++) {
+        if (strcmp(users[currentUserIndex].friends[i], friendID) == 0) {
+            isFriend = true;
+            break;
+        }
+    }
+
+    if (!isFriend) {
+        printf("This user is not your friend.\n");
+        return;
+    }
+
+    char message[200];
+    int choice;
+
+    do {
+        printf("\n--- Chat with %s ---\n", friendID);
+        printf("Chat History:\n");
+        int friendMessageIndex = findUserIndexByID(friendID);
+        for (int i = 0; i < users[currentUserIndex].messageCount[friendMessageIndex]; i++) {
+            printf("%s\n", users[currentUserIndex].chatHistory[friendMessageIndex][i]);
+        }
+
+        printf("\n1. Send a message\n");
+        printf("2. Go back\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
+
+        switch (choice) {
+            case 1:
+                printf("Enter your message: ");
+                getchar(); // Consume the newline character
+                fgets(message, sizeof(message), stdin);
+                message[strcspn(message, "\n")] = '\0'; // Remove the trailing newline
+
+                // Append message to sender's chat history
+                int senderIndex = findUserIndexByID(friendID);
+                if (users[currentUserIndex].messageCount[senderIndex] < MAX_MESSAGES) {
+                    strcpy(users[currentUserIndex].chatHistory[senderIndex][users[currentUserIndex].messageCount[senderIndex]++], message);
+                } else {
+                    printf("Chat history is full. Unable to send the message.\n");
+                }
+
+                // Append message to recipient's chat history
+                int recipientIndex = findUserIndexByID(users[currentUserIndex].userID);
+                if (users[friendIndex].messageCount[recipientIndex] < MAX_MESSAGES) {
+                    strcpy(users[friendIndex].chatHistory[recipientIndex][users[friendIndex].messageCount[recipientIndex]++], message);
+                }
+
+                saveUsersToFile();
+                printf("Message sent.\n");
+                break;
+            case 2:
+                printf("Exiting chatbox.\n");
+                break;
+            default:
+                printf("Invalid choice!\n");
+        }
+    } while (choice != 2);
+}
+
 
 // Logged-in menu
 void loggedInMenu(int currentUserIndex) {
